@@ -1,0 +1,89 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: ssf_db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+      MYSQL_DATABASE: ${DB_DATABASE:-stockflow}
+      MYSQL_USER: ${DB_USERNAME:-stockflow}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-stockflowpass}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USERNAME:-stockflow}", "-p${DB_PASSWORD:-stockflowpass}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - ssf_network
+
+  api:
+    build:
+      context: ../test-simple-stock-flow-api
+      dockerfile: Dockerfile
+    container_name: ssf_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-stockflow}
+      DB_USERNAME: ${DB_USERNAME:-stockflow}
+      DB_PASSWORD: ${DB_PASSWORD:-stockflowpass}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-super_secret_jwt_key_stock_flow_2026}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@stockflow.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123*}
+      MEDIA_ROOT: /var/www/media
+    volumes:
+      - ../test-simple-stock-flow-api:/var/www/html
+      - api_vendor:/var/www/html/vendor
+      - media_data:/var/www/media
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks:
+      - ssf_network
+
+  app:
+    build:
+      context: ../test-simple-stock-flow-app
+      dockerfile: Dockerfile
+    container_name: ssf_app
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      - media_data:/var/www/media:ro
+    networks:
+      - ssf_network
+
+volumes:
+  db_data:
+  api_vendor:
+  media_data:
+
+networks:
+  ssf_network:
+    driver: bridge
