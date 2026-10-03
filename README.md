@@ -1,108 +1,108 @@
-# Simple Stock Flow · Infraestructura y Contenedores
+# Simple Stock Flow · Infrastructure & Containers
 
-> **Prueba técnica SDD · Ficha ADSO 3413974**  
-> Definición y orquestación de servicios en Docker Compose con MySQL 8.4 LTS, backend API y frontend Nginx.
-
----
-
-## 1. ¿Qué es este repositorio y qué rol cumple en Simple Stock Flow?
-
-Este repositorio contiene la **orquestación de contenedores y redes** (`docker-compose.yml`) de la solución completa *Simple Stock Flow*.
-Cumple el rol de **coordinador del entorno de ejecución**, levantando:
-- `db`: Motor de base de datos **MySQL 8.4 LTS**, con sql-mode estricto y codificación `utf8mb4`. **Inicia con la base de datos completamente vacía** (ADR-001: la API es la dueña del esquema mediante migraciones automáticas).
-- `api`: Servicio backend en **PHP 8.2 + Laravel 11**, configurado para ejecutar migraciones, sembrar el usuario administrador inicial si no existe, e iniciar en el puerto interno `8000`.
-- `app`: Servidor web **Nginx** que sirve la Single Page Application en **React 18** en el puerto `8080` y actúa como proxy inverso para las peticiones a `/api/` y el volumen de medios `/media/`.
-- Volúmenes persistentes con nombres explícitos: `db_data`, `api_vendor`, `media_data`.
+> **SDD Technical Assessment · SENA ADSO Class 3413974**  
+> Service definition and orchestration via Docker Compose with MySQL 8.4 LTS, backend API, and Nginx frontend.
 
 ---
 
-## 2. ¿Cómo se ejecuta localmente?
+## 1. What is this repository and what role does it play in Simple Stock Flow?
 
-### Con Docker Compose (Modo Producción / Evaluación)
-Los repositorios deben estar clonados como directorios hermanos. Desde la carpeta `test-simple-stock-flow-infra`:
+This repository contains the **container and network orchestration** (`docker-compose.yml`) for the entire *Simple Stock Flow* solution.
+It serves as the **runtime environment coordinator**, provisioning:
+- `db`: **MySQL 8.4 LTS** database engine configured with strict sql-mode and `utf8mb4` encoding. **Starts with a completely empty database** (ADR-001: the API owns the schema via automated migrations).
+- `api`: Backend service in **PHP 8.2 + Laravel 11**, configured to run migrations, seed the initial administrator user if not present, and serve on internal port `8000`.
+- `app`: **Nginx** web server hosting the **React 18** Single Page Application on port `8080` and acting as a reverse proxy for `/api/` requests and `/media/` static asset volume.
+- Named persistent volumes: `db_data`, `api_vendor`, `media_data`.
+
+---
+
+## 2. How to run it locally?
+
+### With Docker Compose (Production / Assessment Mode)
+The repositories must be cloned as sibling directories. From the `test-simple-stock-flow-infra` folder:
 
 ```bash
-# 1. Copiar variables de entorno
+# 1. Copy environment variables
 cp .env.example .env
 
-# 2. Levantar los servicios en segundo plano
+# 2. Start services in background
 docker compose up -d --build
 
-# 3. Comprobar el estado y salud de los contenedores
+# 3. Check container status and health
 docker compose ps
 ```
 
-Puntos de acceso una vez levantado:
+Access points once running:
 - **Frontend SPA (Nginx):** `http://localhost:8080`
-- **Backend API (Laravel):** `http://localhost:8000` (o a través de `http://localhost:8080/api/`)
+- **Backend API (Laravel):** `http://localhost:8000` (or via `http://localhost:8080/api/`)
 - **Healthcheck:** `http://localhost:8000/health`
 
-### Con Docker Compose (Modo Desarrollo)
-Si se desea exponer el puerto de la base de datos (3306) al host:
+### With Docker Compose (Development Mode)
+If you wish to expose the database port (3306) to the host machine:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-### Detener los servicios
+### Stopping Services
 ```bash
 docker compose down
-# O para reiniciar limpiando volúmenes de datos:
+# Or to reset and wipe persistent data volumes:
 docker compose down -v
 ```
 
 ---
 
-## 3. Variables de entorno requeridas
+## 3. Required Environment Variables
 
-El archivo `.env` (basado en `.env.example`) controla la configuración:
+The `.env` file (based on `.env.example`) controls service configuration:
 
-| Variable | Descripción | Valor por Defecto |
+| Variable | Description | Default Value |
 |---|---|---|
-| `DB_ROOT_PASSWORD` | Contraseña root del motor MySQL | `rootsecret` |
-| `DB_DATABASE` | Nombre de la base de datos del sistema | `stockflow` |
-| `DB_USERNAME` | Usuario de la aplicación | `stockflow` |
-| `DB_PASSWORD` | Contraseña del usuario de base de datos | `stockflowpass` |
-| `JWT_SIGNING_KEY` | Clave secreta para firma simétrica HS256 | Requerido en producción |
-| `ADMIN_EMAIL` | Correo del administrador inicial | `admin@stockflow.com` |
-| `ADMIN_PASSWORD` | Contraseña del administrador inicial | Requerido en producción |
+| `DB_ROOT_PASSWORD` | Root password for MySQL engine | `rootsecret` |
+| `DB_DATABASE` | System database name | `stockflow` |
+| `DB_USERNAME` | Application database user | `stockflow` |
+| `DB_PASSWORD` | Application database user password | `stockflowpass` |
+| `JWT_SIGNING_KEY` | Symmetric secret key for HS256 JWT tokens | Required in production |
+| `ADMIN_EMAIL` | Initial admin user email | `admin@stockflow.com` |
+| `ADMIN_PASSWORD` | Initial admin user password | Required in production |
 
-*Nota de seguridad (Artículo IX): No se permiten valores por defecto inseguros para credenciales de administración en entornos de producción.*
+*Security note (Article IX): Insecure default passwords are strictly prohibited for administrative credentials in production environments.*
 
 ---
 
-## 4. ¿Cómo se ejecutan las pruebas y sondas de verificación?
+## 4. How are tests and verification probes executed?
 
-El repositorio incluye suites de comprobación automatizada de las sondas de verificación (P-01 a P-42):
+The repository includes automated test suites covering all verification probes (P-01 through P-42):
 
-### En Linux / macOS / Git Bash:
+### On Linux / macOS / Git Bash:
 ```bash
 chmod +x verify.sh
 ./verify.sh
 ```
 
-### En Windows (PowerShell):
+### On Windows (PowerShell):
 ```powershell
 .\verify.ps1
 ```
 
-El script verifica automáticamente:
-1. Healthcheck 200 OK del backend.
-2. Invariante D-C9: 401 sin autenticación con cuerpo estrictamente vacío (`Content-Length: 0`).
-3. Invariante D-C9: 404 ruta no encontrada con cuerpo estrictamente vacío (`Content-Length: 0`).
-4. Autenticación del usuario administrador inicial y emisión de token JWT.
-5. Presencia inmutable de las 5 categorías semilla fijas.
-6. Errores de validación 400 bajo especificación RFC 7807 (`application/problem+json` con `detail` y `errors`).
-7. Disponibilidad y renderizado de la aplicación React servida por Nginx.
+The script automatically verifies:
+1. Backend healthcheck returns 200 OK.
+2. Invariant D-C9: 401 Unauthorized returns strictly empty body (`Content-Length: 0`).
+3. Invariant D-C9: 404 Not Found returns strictly empty body (`Content-Length: 0`).
+4. Initial administrator authentication and JWT token issuance.
+5. Invariable presence of all 5 fixed seed categories.
+6. Validation errors return HTTP 400 under RFC 7807 (`application/problem+json` with `detail` and `errors`).
+7. Availability and rendering of the React application served by Nginx.
 
 ---
 
-## 5. Decisiones técnicas relevantes tomadas durante la implementación
+## 5. Relevant Technical Decisions Taken During Implementation
 
-1. **Cumplimiento Estricto de ADR-001 (Dueño del Esquema):**
-   - El contenedor `db` no incluye ningún archivo SQL ni DDL en `/docker-entrypoint-initdb.d/`. El esquema y las 5 categorías fijas son creadas y versionadas exclusivamente por las migraciones de Laravel al arrancar el contenedor `api`.
-2. **Healthchecks en Cadena con `depends_on` Condicional:**
-   - `api` espera a que `db` reporte estado `healthy` mediante `mysqladmin ping`.
-   - `app` espera a que `api` reporte estado `healthy` mediante `wget http://localhost:8000/health`.
-   - Esto evita fallos de conexión por condiciones de carrera durante el arranque inicial.
-3. **Volumen Compartido `media_data`:**
-   - La API escribe las imágenes subidas por los usuarios en `/var/www/media`, y el contenedor Nginx (`app`) monta dicho volumen como solo lectura (`:ro`) para servirlas a alta velocidad en `/media/` con `client_max_body_size 6m`.
+1. **Strict Compliance with ADR-001 (Schema Ownership):**
+   - The `db` container does not include any SQL or DDL files in `/docker-entrypoint-initdb.d/`. The schema and the 5 immutable seed categories are created and versioned solely by Laravel migrations when the `api` container boots.
+2. **Chained Healthchecks with Conditional `depends_on`:**
+   - `api` waits for `db` to be `healthy` using `mysqladmin ping`.
+   - `app` waits for `api` to be `healthy` using `wget http://localhost:8000/health`.
+   - This eliminates race condition connection failures during cold boots.
+3. **Shared Volume `media_data`:**
+   - The API writes uploaded product images to `/var/www/media`, and Nginx (`app`) mounts this volume as read-only (`:ro`) to serve files with high throughput at `/media/` with `client_max_body_size 6m`.
